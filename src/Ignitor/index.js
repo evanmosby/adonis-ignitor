@@ -133,9 +133,12 @@ class Ignitor {
    *
    * @private
    */
-  _callHooks (lifecycle, event) {
-    hooks[lifecycle].get(event).forEach((hook) => hook())
-  }
+  async _callHooks(lifecycle, event) {
+    const myHooks = hooks[lifecycle].get(event);
+    for (const hook of myHooks) {
+        await hook();
+    }
+}
 
   /**
    * Requires the app package.json file from
@@ -447,7 +450,7 @@ class Ignitor {
    * @private
    */
   async _startHttpServer (httpServerCallback) {
-    this._callHooks('before', 'httpServer')
+    await this._callHooks('before', 'httpServer')
 
     const Server = this._fold.ioc.use('Adonis/Src/Server')
     const Env = this._fold.ioc.use('Adonis/Src/Env')
@@ -472,7 +475,7 @@ class Ignitor {
     /**
      * Start the server
      */
-    Server.listen(Env.get('HOST'), Env.get('PORT'), (error) => {
+    Server.listen(Env.get('HOST'), Env.get('PORT'), async (error) => {
       if (error) {
         this._printError(error)
         return
@@ -483,7 +486,7 @@ class Ignitor {
       }
 
       this._listenForSigEvents()
-      this._callHooks('after', 'httpServer')
+      await this._callHooks('after', 'httpServer')
     })
   }
 
