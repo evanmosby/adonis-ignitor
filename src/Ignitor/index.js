@@ -449,7 +449,7 @@ class Ignitor {
      */
     if (typeof httpServerCallback === "function") {
       debug("binding custom http instance to adonis server");
-      const instance = httpServerCallback(Server.handle.bind(Server));
+      const instance = await httpServerCallback(Server.handle.bind(Server));
       Server.setInstance(instance);
     }
 
