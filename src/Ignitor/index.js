@@ -429,6 +429,7 @@ class Ignitor {
    * provider
    *
    * @param {Object} httpServerCallback
+   * @param {Object} httpsServerCallback
    *
    * @method _startHttpServer
    * @async
@@ -437,11 +438,12 @@ class Ignitor {
    *
    * @private
    */
-  async _startHttpServer(httpServerCallback) {
+  async _startHttpServer(httpServerCallback, httpsServerCallback) {
     await this._callHooks("before", "httpServer");
 
     const Server = this._fold.ioc.use("Adonis/Src/Server");
     const Env = this._fold.ioc.use("Adonis/Src/Env");
+    const Encryption = this._fold.ioc.use("Adonis/Src/Encryption");
 
     /**
      * If a custom http instance is defined, set it
@@ -450,32 +452,66 @@ class Ignitor {
     if (typeof httpServerCallback === "function") {
       debug("binding custom http instance to adonis server");
       const instance = await httpServerCallback(Server.handle.bind(Server));
-      Server.setInstance(instance);
+      Server.setHttpInstance(instance);
     }
 
     /**
-     * Run the Ws server when instructured
+     * If a custom https instance is defined, set it
+     * on the server provider.
      */
-    if (this._wsServer.run) {
-      this._startWsServer(this._wsServer.customHttpServer || Server.getInstance());
+    if (typeof httpsServerCallback === "function") {
+      debug("binding custom https instance to adonis server");
+      const instance = await httpsServerCallback(Server.handle.bind(Server));
+      Server.setHttpsInstance(instance);
     }
 
     /**
-     * Start the server
+     * Start the HTTP and HTTPS server(s) then run the after hook
+     * A local Env file read is done here to grab updates (HTTPS_FILE_PASSWORD in particular)
+     * from the initial read
      */
-    Server.listen(Env.get("HOST"), Env.get("PORT"), async error => {
-      if (error) {
-        this._printError(error);
-        return;
+    // const {HTTP_ENABLED, HTTPS_ENABLED, HTTP_PORT, HTTPS_PORT, HOST,  } = await Env.readEnvFile()
+    if (Env.get("HTTP_ENABLED") === "true" && Env.get("HTTP_PORT")) {
+      if (this._wsServer.run) {
+        this._startWsServer(
+          this._wsServer.customHttpServer || (await Server.getHttpInstance())
+        );
       }
+      Server.httpListen(
+        Env.get("HOST"),
+        Env.get("HTTP_PORT"),
+        async (error) => {
+          if (error) {
+            this._printError(error);
+            return;
+          }
+        }
+      );
+    }
 
-      if (typeof process.emit === "function") {
-        process.emit("adonis:server:start");
+    if (Env.get("HTTPS_ENABLED") === "true" && Env.get("HTTPS_PORT")) {
+      if (this._wsServer.run) {
+        this._startWsServer(
+          this._wsServer.customHttpServer ||
+            (await Server.getHttpsInstance(
+              Env.get("HTTPS_FILE"),
+              Encryption.decrypt(Env.get("HTTPS_FILE_PASSWORD"))
+            ))
+        );
       }
-
-      this._listenForSigEvents();
-      await this._callHooks("after", "httpServer");
-    });
+      Server.httpsListen(
+        Env.get("HOST"),
+        Env.get("HTTPS_PORT"),
+        Env.get("HTTPS_FILE"),
+        Encryption.decrypt(Env.get("HTTPS_FILE_PASSWORD")),
+        async (error) => {
+          if (error) {
+            this._printError(error);
+            return;
+          }
+        }
+      );
+    }
   }
 
   /**
@@ -791,16 +827,23 @@ class Ignitor {
   /**
    * Starts the Adonis http server.
    *
-   * @method fireHttpServer
+   * @method fireHttpServers
    *
    * @param {Function} httpServerCallback
+   * @param {Function} httpsServerCallback
    *
    * @return {void}
    */
-  async fireHttpServer(httpServerCallback) {
+  async fireHttpServers(httpServerCallback, httpsServerCallback) {
     try {
       await this.fire();
-      await this._startHttpServer(httpServerCallback);
+      await this._startHttpServer(httpServerCallback, httpsServerCallback);
+
+      if (typeof process.emit === "function") {
+        process.emit("adonis:server:start");
+      }
+      this._listenForSigEvents();
+      await this._callHooks("after", "httpServer");
     } catch (error) {
       this._printError(error);
     }
