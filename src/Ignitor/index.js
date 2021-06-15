@@ -470,8 +470,8 @@ class Ignitor {
      * A local Env file read is done here to grab updates (HTTPS_FILE_PASSWORD in particular)
      * from the initial read
      */
-    // const {HTTP_ENABLED, HTTPS_ENABLED, HTTP_PORT, HTTPS_PORT, HOST,  } = await Env.readEnvFile()
-    if (Env.get("HTTP_ENABLED") === "true" && Env.get("HTTP_PORT")) {
+    
+    if (Env.get("HTTP_ENABLED") && Env.get("HTTP_PORT")) {
       if (this._wsServer.run) {
         this._startWsServer(
           this._wsServer.customHttpServer || (await Server.getHttpInstance())
@@ -489,7 +489,7 @@ class Ignitor {
       );
     }
 
-    if (Env.get("HTTPS_ENABLED") === "true" && Env.get("HTTPS_PORT")) {
+    if (Env.get("HTTPS_ENABLED") && Env.get("HTTPS_PORT")) {
       if (this._wsServer.run) {
         this._startWsServer(
           this._wsServer.customHttpServer ||
